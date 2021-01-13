@@ -1,7 +1,8 @@
 # Trips-and-Neurotransmitters-Discovering-Principled-Patterns-across-6850-Hallucinogenic-Experiences
-
+Create the python environment:
 `conda env create -f brain_environment.yml`
 
+Activate it:
 `conda activate brain`
 
 Then to run the CCA analsis:
