@@ -6,4 +6,10 @@
 
 Then to run the CCA analsis:
 
-``
+`python cca_on_erowid.py 
+--drug_folder final_drugs_sansdxm
+--limit 300 
+--pca_components 800 
+--cca_components 8 
+--id tester 
+--seed 19376`
