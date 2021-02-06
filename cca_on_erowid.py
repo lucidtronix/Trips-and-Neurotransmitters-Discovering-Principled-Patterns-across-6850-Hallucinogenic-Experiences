@@ -633,7 +633,7 @@ def plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_l
 
 def plot_histograms(cca, receptors, receptor_loadings, drug_loadings, figure_path):
     components = receptor_loadings.shape[-1]
-    f, axes = plt.subplots(2, components, figsize=(10*components, 32))
+    f, axes = plt.subplots(2, components, figsize=(48*components, 48))
     axes[0, 0].set_title(f'Receptors')
     axes[1, 0].set_title(f'Drugs')
     for i in range(components):

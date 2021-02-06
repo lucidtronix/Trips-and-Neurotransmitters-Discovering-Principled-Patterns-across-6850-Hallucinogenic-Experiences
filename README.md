@@ -5,7 +5,7 @@ Create the python environment:
 Activate it:
 `conda activate brain`
 
-Then to run the CCA analsis:
+Then to run the CCA analysis:
 
 ```
 python cca_on_erowid.py 
