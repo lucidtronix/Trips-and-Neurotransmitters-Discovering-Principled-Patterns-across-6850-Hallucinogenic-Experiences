@@ -9,7 +9,7 @@ from nilearn.input_data import NiftiLabelsMasker
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cca_components', default=5, type=int,
+    parser.add_argument('--cca_components', default=8, type=int,
                         help='Number of CCA components to find in reduced word count matrix')
     parser.add_argument('--region_by_expression_csv', default='schaeffer200_17Net_expr_mat.csv',
                         help='Folder of text dumps of testimonials, one drug per file.')

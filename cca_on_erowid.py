@@ -8,6 +8,7 @@ import argparse
 from functools import partial
 
 import numpy as np
+import pandas as pd
 import wordcloud
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -30,7 +31,7 @@ COMMON_WORDS = ['the', 'this', 'that', 'not', 'and', 'have', 'there', 'all', 'th
                 'pill', 'pills', 'pipe', 'smoke', 'smokes', 'smoked', 'blotter', 'tab', 'tabs', 'line', 'lines', 'dose', 'doses', 'dosage', 'hit', 'hits', 'bowl',
                 'trip', 'trips', 'tripping', 'tripped', 'trippy', 'k.hole', 'k-hole', 'khole',
                 'roll', 'rolls', 'rolling', 'rolled',
-                'das', '1999', '1/2', 'ten', 'substance', 'load', 'cherek', '5:00', '2001', '300', 'you', 'josh', 
+                'das', '1999', '1/2', 'ten', 'substance', 'load', 'cherek', '5:00', '2001', '300', 'you', 'josh',
             #    'you', 'seconds', 'months', 'days', 'weeks', 'years', 'second', 'month', 'day', 'week', 'year', 'hour', 'hours',
 
                 'powder', 'crystals', 'vaporized', 'vaporize',  'roll', 'rolling', 'rolled', 'nasal', 'bong', 'foil', 'root', 'bark', 'cannabis', 'toke', 'heroin'
@@ -192,7 +193,7 @@ def make_corpus(drug_folder, affinity_map, limit=None, stratify=None, min_word_o
     for i, d in enumerate(documents):
         for j, word in enumerate(word_columns):
             tf = counts_per_document[i][word] / (1+total_counts_per_document[i])
-            idf = np.log(len(documents) / (total_documents_per_word[word] + 1))+1
+            idf = np.log(len(documents) / (total_documents_per_word[word] + 1))
             tf_idf[i, j] = tf*idf
 
     return tf_idf, affinities, word_columns, selected, drugs
@@ -326,6 +327,8 @@ def make_affinity_map(affinity_file, normalize='by_drug'):
             receptor_normalized[drug] = np.array(scaled_values)
             print(f'drug:{drug} has {receptor_normalized[drug].shape} mean:{np.mean(receptor_normalized[drug]):0.2f} std:{np.std(receptor_normalized[drug]):0.2f}')
         return receptor_normalized, receptors
+    df = pd.DataFrame.from_dict(affinity_map, orient='index', columns=receptors)
+    df.to_csv('./drug_by_affinity_matrix.csv')
     return affinity_map, receptors
 
 
@@ -633,9 +636,9 @@ def plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_l
 
 def plot_histograms(cca, receptors, receptor_loadings, drug_loadings, figure_path):
     components = receptor_loadings.shape[-1]
-    f, axes = plt.subplots(2, components, figsize=(48*components, 48))
-    axes[0, 0].set_title(f'Receptors')
-    axes[1, 0].set_title(f'Drugs')
+    f, axes = plt.subplots(2, components, figsize=(22*components, 36))
+    #axes[0, 0].set_title(f'Receptors')
+    #axes[1, 0].set_title(f'Drugs')
     for i in range(components):
         names = []
         colors = []
@@ -645,10 +648,13 @@ def plot_histograms(cca, receptors, receptor_loadings, drug_loadings, figure_pat
             heights.append(abs(cca.y_loadings_[receptor_loadings[:, i], i][k]))
             colors.append('blue' if cca.y_loadings_[receptor_loadings[:, i], i][k] < 0 else 'red')
         axes[0, i].bar(names, heights, color=colors)
-        axes[0, i].set_xticklabels(names, rotation=90)
-        axes[0, i].tick_params(axis='y', labelrotation=90)
+        axes[0, i].set_xticklabels(names, rotation=270, fontsize=24)
+        axes[0, i].tick_params(axis='y', labelrotation=270, labelsize=18)
         axes[0, i].set_ylabel(f'Component {i}')
-
+        axes[0, i].spines['top'].set_visible(False)
+        axes[0, i].spines['right'].set_visible(False)
+        axes[0, i].spines['bottom'].set_visible(False)
+        axes[0, i].spines['left'].set_visible(False)
         names = []
         colors = []
         heights = []
@@ -656,16 +662,20 @@ def plot_histograms(cca, receptors, receptor_loadings, drug_loadings, figure_pat
         component_drug_loadings = []
         for drug in drug_list:
             component_drug_loadings.append(float(drug_loadings[drug][i]))
-        sorted_loadings = np.argsort(np.array(component_drug_loadings), axis=0)
+        sorted_loadings = np.argsort(np.array(component_drug_loadings), axis=0)[::-1]
         drug_list_sorted = np.array(drug_list)[sorted_loadings]
         for k, drug in enumerate(drug_list_sorted):
             names.append(drug)
-            heights.append(abs(drug_loadings[drug][i]))
+            heights.append(100.0*abs(drug_loadings[drug][i]))
             colors.append('blue' if drug_loadings[drug][i] < 0 else 'red')
 
         axes[1, i].bar(names, heights, color=colors)
-        axes[1, i].set_xticklabels(names, rotation=90)
-        axes[1, i].tick_params(axis='y', labelrotation=90)
+        axes[1, i].set_xticklabels(names, rotation=90, fontsize=44)
+        axes[1, i].tick_params(axis='y', labelrotation=90, labelsize=24)
+        axes[1, i].spines['top'].set_visible(False)
+        axes[1, i].spines['right'].set_visible(False)
+        axes[1, i].spines['bottom'].set_visible(False)
+        axes[1, i].spines['left'].set_visible(False)
 
     if not os.path.exists(os.path.dirname(figure_path)):
         os.makedirs(os.path.dirname(figure_path))
