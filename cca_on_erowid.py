@@ -121,7 +121,7 @@ def run():
 
 def find_latent_space_of_consciousness(max_testimonials_per_drug, pca_components, cca_components, drug_folder,
                                        normalize, id, stratify=None, permutation_tests=21, min_word_occurrences=12):
-    affinity_map, receptors = make_affinity_map('./pKi_aggregated_affinities_2020_12_5.csv', normalize=normalize)
+    affinity_map, receptors = make_affinity_map('pKi_aggregated_affinities_27_drugs_only_2_28_nature.csv', normalize=normalize)
     word_count_matrix, affinities, word_columns, selected, drugs = make_corpus(drug_folder, affinity_map, max_testimonials_per_drug,
                                                                                stratify, min_word_occurrences)
     pca, tfidf_reduced = pca_on_word_matrix(word_count_matrix, pca_components)
@@ -327,6 +327,7 @@ def make_affinity_map(affinity_file, normalize='by_drug'):
             receptor_normalized[drug] = np.array(scaled_values)
             print(f'drug:{drug} has {receptor_normalized[drug].shape} mean:{np.mean(receptor_normalized[drug]):0.2f} std:{np.std(receptor_normalized[drug]):0.2f}')
         return receptor_normalized, receptors
+
     df = pd.DataFrame.from_dict(affinity_map, orient='index', columns=receptors)
     df.to_csv('./drug_by_affinity_matrix.csv')
     return affinity_map, receptors

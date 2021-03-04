@@ -106,9 +106,9 @@ for roi_index, region in enumerate(df_region_by_expression.columns[:-1]):
 cca_df = df_region_ccas.loc[df_region_ccas[f'cca_component_0'] != 0]
 for cca_index in range(len(df_receptor_ccas.index)):
     print(f'df_region_ccas mean {cca_df.iloc[:, cca_index].mean()}')
-    #cca_df.iloc[:, cca_index] -= cca_df.iloc[:, cca_index].mean()
-    #print(f'df_region_ccas mean {cca_df.iloc[:, cca_index].mean()}')
-region_by_components_file = f"tsvs/cca_{os.path.basename(args.receptor_cca_tsv).replace('.tsv', '')}_loadings_by_brain_region_schaeffer.csv"
+    cca_df.iloc[:, cca_index] -= cca_df.iloc[:, cca_index].mean()
+    print(f'df_region_ccas mean {cca_df.iloc[:, cca_index].mean()}')
+region_by_components_file = f"tsvs/cca_{os.path.basename(args.receptor_cca_tsv).replace('.tsv', '')}_loadings_by_brain_region.csv"
 cca_df.to_csv(region_by_components_file)
 print(f'Done! Wrote region by components file at: {region_by_components_file}')
 
