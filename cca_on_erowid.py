@@ -121,7 +121,9 @@ def run():
 
 def find_latent_space_of_consciousness(max_testimonials_per_drug, pca_components, cca_components, drug_folder,
                                        normalize, id, stratify=None, permutation_tests=21, min_word_occurrences=12):
-    affinity_map, receptors = make_affinity_map('pKi_aggregated_affinities_27_drugs_only_2_28_nature.csv', normalize=normalize)
+    #affinity_map, receptors = make_affinity_map('pKi_aggregated_affinities_27_drugs_only_2_28_nature.csv', normalize=normalize)
+    affinity_map, receptors = make_affinity_map('NEW_AFFINITY_MATRIX.csv', normalize=normalize)
+
     word_count_matrix, affinities, word_columns, selected, drugs = make_corpus(drug_folder, affinity_map, max_testimonials_per_drug,
                                                                                stratify, min_word_occurrences)
     pca, tfidf_reduced = pca_on_word_matrix(word_count_matrix, pca_components)
@@ -266,9 +268,9 @@ def fit_cca_and_transform(components, word_train, word_test, receptor_train, rec
     return cca, word_train_r, word_test_r, receptor_train_r, receptor_test_r
 
 
-def make_affinity_map(affinity_file, normalize='by_drug'):
+def make_affinity_map(affinity_file, normalize):
     affinity_map = {}
-    min_value = -4.0
+    min_value = -4.0 # -4.8451 # 4.0
     eps = 1e-7
     with open(affinity_file, 'r') as volumes:
         lol = list(csv.reader(volumes, delimiter=','))
@@ -291,9 +293,9 @@ def make_affinity_map(affinity_file, normalize='by_drug'):
                     values.append(float(row[i+1]))
                     receptor_columns[r].append(float(row[i+1]))
             if normalize == 'exponent':
-                affinity_map[drug.lower()] = np.exp(-np.array(values))
+                affinity_map[drug.lower()] = np.power(10, -np.array(values))
             else:
-                affinity_map[drug.lower()] = np.array(values)
+                affinity_map[drug.lower()] = (np.array(values)) - max(values) # Potency Transform
             if normalize == 'by_drug':
                 mean = np.mean(real_values)
                 std = np.std(real_values) + eps
@@ -481,11 +483,16 @@ def analyze_components(cca, pca, pca_components, word_columns, receptors, drugs,
     pca_loadings = np.dot(cca.x_loadings_.T, pca.components_[:pca_components, :]).T
     word_loadings = np.argsort(pca_loadings, axis=0)
     print(f'pca_scaled {pca_loadings.shape} word loadings {word_loadings.shape} len words:{len(word_columns)} receptor_loadings {receptor_loadings.shape}')
-    plot_histograms(cca, receptors, receptor_loadings, drug_loadings, f'results/histos_{name}_cca_on_{drug_folder}_pca_{pca_components}.png')
+    plot_histograms(cca, receptors, receptor_loadings, drug_loadings, f'results/histos_{name}_cca_on_{drug_folder}_pca_{pca_components}.png', 'blue', 'red')
+    plot_histograms(cca, receptors, receptor_loadings, drug_loadings, f'results/histos_neg_{name}_cca_on_{drug_folder}_pca_{pca_components}.png', 'red', 'blue')
     figure_path = f'results/cloud_{name}_cca_on_{drug_folder}_{word_loadings.shape[-1]}_pca_{pca_components}_limit_{limit}.png'
-    plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors)
+    plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors, 'blue', 'red')
     figure_path = f'results/list_{name}_cca_on_{drug_folder}_{word_loadings.shape[-1]}_pca_{pca_components}_limit_{limit}.png'
-    plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors)
+    plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors, 'blue', 'red')
+    figure_path = f'results/cloud_neg_{name}_cca_on_{drug_folder}_{word_loadings.shape[-1]}_pca_{pca_components}_limit_{limit}.png'
+    plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors, 'red', 'blue')
+    figure_path = f'results/list_neg_{name}_cca_on_{drug_folder}_{word_loadings.shape[-1]}_pca_{pca_components}_limit_{limit}.png'
+    plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors, 'red', 'blue')
     for i in range(word_loadings.shape[-1]):
         print(f'\n\n\n~~~~~~~~~~~~~~~ Component {i} ~~~~~~~~~~~~~~~~~')
         print(f'Component {i} Highest 18 word loadings: {np.flip(np.array(word_columns)[word_loadings[:, i]][-(top_words+1):])}')
@@ -499,11 +506,11 @@ def analyze_components(cca, pca, pca_components, word_columns, receptors, drugs,
         print(f'Lowest 8 Y loads {cca.y_loadings_[receptor_loadings[:, i], i][:top_receptors]}\n\n')
 
 
-def _color(sign_dict, word, **kwargs):
-    return 'blue' if sign_dict[word] < 0 else 'red'
+def _color(sign_dict, pos_color, neg_color, word, **kwargs):
+    return neg_color if sign_dict[word] < 0 else pos_color
 
 
-def plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors):
+def plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors, pos_color, neg_color):
     components = word_loadings.shape[-1]
     f, axes = plt.subplots(3, components, figsize=(10*components, 32), gridspec_kw={'height_ratios': [5.1, 2, 3]})
     axes[0, 0].set_title(f'Word Clouds')
@@ -527,7 +534,7 @@ def plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_
         print(f'got word map: {word_map}')
         wc = wordcloud.WordCloud(background_color='white')
         wc.generate_from_frequencies(word_map)
-        bag = wc.recolor(color_func=partial(_color, sign_map))
+        bag = wc.recolor(color_func=partial(_color, sign_map, pos_color, neg_color))
         axes[0, i].imshow(bag)
 
         min_loading = np.min(cca.y_loadings_[receptor_loadings[:, i], i])
@@ -546,7 +553,7 @@ def plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_
 
         wc = wordcloud.WordCloud(background_color='white')
         wc.generate_from_frequencies(receptor_map)
-        bag = wc.recolor(color_func=partial(_color, sign_map))
+        bag = wc.recolor(color_func=partial(_color, sign_map, pos_color, neg_color))
         axes[1, i].imshow(bag)
 
         axes[0, i].set_ylabel(f'Component {i}')
@@ -576,7 +583,7 @@ def plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_
 
         wc = wordcloud.WordCloud(background_color='white')
         wc.generate_from_frequencies(drug_map)
-        bag = wc.recolor(color_func=partial(_color, sign_map))
+        bag = wc.recolor(color_func=partial(_color, sign_map, pos_color, neg_color))
         axes[2, i].imshow(bag)
 
     if not os.path.exists(os.path.dirname(figure_path)):
@@ -584,7 +591,7 @@ def plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_
     plt.savefig(figure_path)
 
 
-def plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors):
+def plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_loadings, receptor_loadings, figure_path, top_words, top_receptors, pos_color, neg_color):
     components = word_loadings.shape[-1]
     f, axes = plt.subplots(3, components, figsize=(10*components, 32), gridspec_kw={'height_ratios': [5.1, 1.6, 4]})
     axes[0, 0].set_title(f'Words')
@@ -592,12 +599,12 @@ def plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_l
     axes[2, 0].set_title(f'Drugs Associated with Components')
     for i in range(components):
         for k in range(top_words):
-            _text(axes[0, i], word_columns, word_loadings, pca_loadings, i, -(k+1), c="red", scalar=28, std_scalar=2.25, max_words=top_words)
-            _text(axes[0, i], word_columns, word_loadings, pca_loadings, i, k, c="blue", scalar=28, std_scalar=2.25, max_words=top_words)
+            _text(axes[0, i], word_columns, word_loadings, pca_loadings, i, -(k+1), c=neg_color, scalar=28, std_scalar=2.25, max_words=top_words)
+            _text(axes[0, i], word_columns, word_loadings, pca_loadings, i, k, c=pos_color, scalar=28, std_scalar=2.25, max_words=top_words)
 
         for k in range(top_receptors):
-            _text(axes[1, i], receptors, receptor_loadings, cca.y_loadings_, i, -(k+1), c="red", scalar=25, std_scalar=1.0, max_words=top_receptors)
-            _text(axes[1, i], receptors, receptor_loadings, cca.y_loadings_, i, k, c="blue", scalar=25, std_scalar=1.0, max_words=top_receptors)
+            _text(axes[1, i], receptors, receptor_loadings, cca.y_loadings_, i, -(k+1), c=neg_color, scalar=25, std_scalar=1.0, max_words=top_receptors)
+            _text(axes[1, i], receptors, receptor_loadings, cca.y_loadings_, i, k, c=pos_color, scalar=25, std_scalar=1.0, max_words=top_receptors)
 
         axes[0, i].set_ylabel(f'Component {i}')
         axes[0, i].set_xticks(())
@@ -621,11 +628,11 @@ def plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_l
             scaled_weight = _translate(drug_loadings[drug][i], mini, maxi, -28, 28)
             fontsize = max(12, abs(scaled_weight))
             if scaled_weight > 0:
-                c = "red"
+                c = neg_color
                 xpos = 0.53
                 ypos = -0.02 + (k / len(drug_list))
             else:
-                c = "blue"
+                c = pos_color
                 xpos = 0.03
                 ypos = 0.94 - (k/len(drug_list))
             axes[2, i].text(xpos, ypos, drug, fontsize=fontsize, c=c)
@@ -635,7 +642,7 @@ def plot_lists(cca, word_columns, receptors, pca_loadings, word_loadings, drug_l
     plt.savefig(figure_path)
 
 
-def plot_histograms(cca, receptors, receptor_loadings, drug_loadings, figure_path):
+def plot_histograms(cca, receptors, receptor_loadings, drug_loadings, figure_path, pos_color, neg_color):
     components = receptor_loadings.shape[-1]
     f, axes = plt.subplots(2, components, figsize=(22*components, 36))
     #axes[0, 0].set_title(f'Receptors')
@@ -647,7 +654,7 @@ def plot_histograms(cca, receptors, receptor_loadings, drug_loadings, figure_pat
         for k in range(len(receptors)):
             names.append(np.array(receptors)[receptor_loadings[:, i]][k])
             heights.append(abs(cca.y_loadings_[receptor_loadings[:, i], i][k]))
-            colors.append('blue' if cca.y_loadings_[receptor_loadings[:, i], i][k] < 0 else 'red')
+            colors.append(neg_color if cca.y_loadings_[receptor_loadings[:, i], i][k] < 0 else pos_color)
         axes[0, i].bar(names, heights, color=colors)
         axes[0, i].set_xticklabels(names, rotation=270, fontsize=24)
         axes[0, i].tick_params(axis='y', labelrotation=270, labelsize=18)
@@ -668,7 +675,7 @@ def plot_histograms(cca, receptors, receptor_loadings, drug_loadings, figure_pat
         for k, drug in enumerate(drug_list_sorted):
             names.append(drug)
             heights.append(100.0*abs(drug_loadings[drug][i]))
-            colors.append('blue' if drug_loadings[drug][i] < 0 else 'red')
+            colors.append(neg_color if drug_loadings[drug][i] < 0 else pos_color)
 
         axes[1, i].bar(names, heights, color=colors)
         axes[1, i].set_xticklabels(names, rotation=90, fontsize=44)
