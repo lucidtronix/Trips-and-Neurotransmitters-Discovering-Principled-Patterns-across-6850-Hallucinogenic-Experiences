@@ -1,7 +1,7 @@
 # Trips-and-Neurotransmitters-Discovering-Principled-Patterns-across-6850-Hallucinogenic-Experiences
 This code accompanies 
 [our paper available on BioRxiv](https://doi.org/10.1101/2021.07.13.452263), 
-analyzing subjective reports of psychedelic experiences and mapping them to the discovered patterns to the brain.
+analyzing subjective reports of psychedelic experiences and mapping the discovered patterns to the brain.
 See for example, the strongest canonical component:
 ![image](component0.png)
 

@@ -9,6 +9,7 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
+import seaborn as sb
 import wordcloud
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
@@ -17,7 +18,7 @@ from scipy.stats import pearsonr
 
 CHARS_TO_REMOVE = " .,~{}[]()!?@#$-:;_\"'"
 MIN_LINE_CHARS = 50
-
+MEDIAN_AGE = 21
 COMMON_WORDS = ['the', 'this', 'that', 'not', 'and', 'have', 'there', 'all', 'then', 'what', 'but', 'would', 'for', 'with', 'will', 'was', 'thing',
                 'get', 'could', 'from', 'more', 'etc', 'who', 'out', 'another', 'like', 'too', 'while', 'about', 'more', 'less', 'way', 'on',
                 'she', 'her', 'him', 'his', 'our', "i'm", 'i’m', 'are', 'can’t', "i'd", 'i’d',  'ich', 'der', 'das',
@@ -83,8 +84,8 @@ def parse_args():
                         help='Number of PCA components to keep in reduced word count matrix')
     parser.add_argument('--cca_components', default=5, type=int,
                         help='Number of CCA components to find in reduced word count matrix')
-    parser.add_argument('--stratify', choices=['male', 'female', None],
-                        help='Stratify by gender.')
+    parser.add_argument('--stratify', choices=['male', 'female', 'old', 'young', None],
+                        help='Stratify by sex or age.')
     parser.add_argument('--receptor_file', default='psychedelics_mdma',
                         help='Folder of text dumps of testimonials, one drug per file.')
     parser.add_argument('--min_word_occurrences', default=7, type=int,
@@ -122,9 +123,10 @@ def run():
 def find_latent_space_of_consciousness(max_testimonials_per_drug, pca_components, cca_components, drug_folder,
                                        normalize, id, stratify=None, permutation_tests=21, min_word_occurrences=12):
     #affinity_map, receptors = make_affinity_map('pKi_aggregated_affinities_27_drugs_only_2_28_nature.csv', normalize=normalize)
-    affinity_map, receptors = make_affinity_map('NEW_AFFINITY_MATRIX.csv', normalize=normalize)
+    #affinity_map, receptors = make_affinity_map('NEW_AFFINITY_MATRIX_revived.csv', normalize=normalize)
+    affinity_map, receptors = make_affinity_map('NEW_AFFINITY_MATRIX_nomenclature.csv', normalize=normalize)
 
-    word_count_matrix, affinities, word_columns, selected, drugs = make_corpus(drug_folder, affinity_map, max_testimonials_per_drug,
+    word_count_matrix, affinities, word_columns, selected, drugs, testimonial_totals = make_corpus(drug_folder, affinity_map, max_testimonials_per_drug,
                                                                                stratify, min_word_occurrences)
     pca, tfidf_reduced = pca_on_word_matrix(word_count_matrix, pca_components)
     cca, word_train_r, word_test_r, receptor_train_r, receptor_test_r = fit_cca_and_transform(cca_components, tfidf_reduced,
@@ -133,7 +135,7 @@ def find_latent_space_of_consciousness(max_testimonials_per_drug, pca_components
     receptor_cca_loads = np.vstack((np.asarray(receptors), np.asarray(cca.y_loadings_.T)))
     filename = f"./tsvs/{id}_max_{max_testimonials_per_drug}_pca_{pca_components}_{stratify}_cca_{cca_components}_on_{drug_folder}.tsv"
     np.savetxt(filename, receptor_cca_loads, delimiter="\t", fmt="%s")
-
+    #heatmap_correlations(cca, word_count_matrix, testimonial_totals, drug_folder)
     receptor_cca_drug_correlations(affinity_map, receptors, cca)
     analyze_components(cca, pca, pca_components, word_columns, receptors, drugs, drug_folder, name=id, limit=max_testimonials_per_drug)
     if permutation_tests > 0:
@@ -148,26 +150,72 @@ def find_latent_space_of_consciousness(max_testimonials_per_drug, pca_components
     return cca, selected
 
 
+def heatmap_correlations(cca, word_count_matrix, testimonial_totals, drug_folder, drug_prefix='./testimonials/'):
+    corrs = np.zeros((4, cca.x_scores_.shape[-1]))
+    unique_words = np.count_nonzero(word_count_matrix, axis=-1)
+    print(unique_words.shape)
+    for component in range(cca.x_scores_.shape[-1]):
+        rho1 = pearsonr(unique_words, cca.x_scores_[:, component])[0]
+        rho2 = pearsonr(unique_words, cca.y_scores_[:, component])[0]
+        corrs[0, component] = rho1
+        corrs[1, component] = rho2
+        print(f'Word complexity Pearson at component {component} is {rho1} {rho2}')
+
+    drug_properties = pd.read_csv('drug_properties.tsv', sep='\t', header=None)
+    zipt = {k: v for k,v in zip(drug_properties[0], drug_properties[4])}
+    durations = []
+    for f in sorted(os.listdir(drug_prefix + drug_folder)):
+        if not f.endswith('.txt'):
+            continue
+        drug = f.replace('.txt', '')
+        drug_count = testimonial_totals[drug]
+        duration = float(zipt[drug])  #float(zipt[drug.lower()])
+        durations.extend([duration] * drug_count)
+    for component in range(cca.x_scores_.shape[-1]):
+        rho1 = pearsonr(durations, cca.x_scores_[:, component])[0]
+        rho2 = pearsonr(durations, cca.y_scores_[:, component])[0]
+        corrs[2, component] = rho1
+        corrs[3, component] = rho2
+        print(f'Duration Pearson at component {component} is {rho1} {rho2}')
+
+    fig, ax = plt.subplots(figsize=(11, 9))
+    # plot heatmap
+    sb.heatmap(corrs, cmap=sb.diverging_palette(220, 20, as_cmap=True), square=True, center=0, vmin=-1.0, vmax=1.0,
+           linewidth=0.3, cbar_kws={"shrink": .4})
+    plt.title('Correlations between Mode and Meta Data')
+    yticks_labels = [f'Language\nComplexity\nx        \nSemantics', 'Language\nComplexity\nx        \nReceptors', 'Duration\nx        \nSemantics', 'Duration\nx        \nReceptors']
+    xticks_labels = (range(1, cca.x_scores_.shape[-1]+1 ))
+    plt.xlabel('Mode #')
+    plt.yticks(np.arange(4)+0.5 , labels=yticks_labels)
+    plt.xticks(np.arange(cca.x_scores_.shape[-1]) + 0.5, labels=xticks_labels)
+    figure_path='./heatmap_correlations.png'
+    if not os.path.exists(os.path.dirname(figure_path)):
+        os.makedirs(os.path.dirname(figure_path))
+    plt.savefig(figure_path)
+
 def make_corpus(drug_folder, affinity_map, limit=None, stratify=None, min_word_occurrences=12, drug_prefix = './testimonials/'):
     drugs = {}
     selected = {}
     documents = {}
     affinities = []
+    meta_data = {}
     testimonial_totals = {}
     offset_testimonials = 0
     for f in sorted(os.listdir(drug_prefix + drug_folder)):
         if not f.endswith('.txt'):
             continue
         with open(os.path.join(drug_prefix, drug_folder, f)) as text:
-            docs, affinity, select, drug, offset = split_clean(f, text.read(), affinity_map, limit=limit, stratify=stratify,
+            docs, affinity, select, drug, offset, meta = split_clean(f, text.read(), affinity_map, limit=limit, stratify=stratify,
                                                                offset_words=len(documents), offset_testimonials=offset_testimonials)
             offset_testimonials += offset
             testimonial_totals[f.replace('.txt', '')] = len(docs)
             drugs.update(drug)
+            meta_data[f] = meta
             documents.update(docs)
             selected.update(select)
             affinities.extend(affinity)
     plot_testimonial_histogram(testimonial_totals)
+    plot_meta_data(meta_data)
     print(f'Got {len(documents)} total testimonials.')
     frequency = Counter()
     counts_per_document = defaultdict(Counter)
@@ -198,7 +246,7 @@ def make_corpus(drug_folder, affinity_map, limit=None, stratify=None, min_word_o
             idf = np.log(len(documents) / (total_documents_per_word[word] + 1))
             tf_idf[i, j] = tf*idf
 
-    return tf_idf, affinities, word_columns, selected, drugs
+    return tf_idf, affinities, word_columns, selected, drugs, testimonial_totals
 
 
 def pca_on_word_matrix(tf_idf, pca_components):
@@ -241,6 +289,46 @@ def plot_testimonial_histogram(testimonial_totals):
     plt.savefig(figure_path)
 
 
+def plot_meta_data(meta_data):
+    f, axes = plt.subplots(len(meta_data), 2, figsize=(6, len(meta_data)*4))
+    stats = Counter()
+    all_ages = []
+    for i, drug in enumerate(meta_data):
+        ages = []
+        sexes = []
+        for meta in meta_data[drug]:
+            try:
+                ages.append(float(meta_data[drug][meta]['age']))
+                all_ages.append(float(meta_data[drug][meta]['age']))
+                stats['age'] += 1
+                if 'male' == meta_data[drug][meta]['sex']:
+                    sex = 1
+                elif 'female' == meta_data[drug][meta]['sex']:
+                    sex = 0
+                else:
+                    continue
+                sexes.append(sex)
+                stats['sex'] += 1
+            except:
+                continue
+        axes[i][0].set_title(f'Meta Data for {drug}')
+
+        axes[i][0].hist(ages, linewidth=3)
+        axes[i][1].hist(sexes, linewidth=3)
+        axes[i][1].set_xticks([0, 1])
+        axes[i][1].set_xticklabels(['Female', 'Male'])
+
+        print(f'Drug {drug} has mean: {np.mean(ages)}  {np.median(ages)}')
+    print(f'Total ages  has mean: {np.mean(all_ages)}  {np.median(all_ages)}')
+    axes[0][0].set_ylabel('# Testimonials')
+    axes[0][0].set_xlabel('Age')
+    axes[0][1].set_title('Sex')
+    plt.tight_layout()
+    figure_path = f'results/meta_data.png'
+    if not os.path.exists(os.path.dirname(figure_path)):
+        os.makedirs(os.path.dirname(figure_path))
+    plt.savefig(figure_path)
+
 def shuffle_and_split_data(x, y):
     assert x.shape[0] == y.shape[0]
     p = np.random.permutation(x.shape[0])
@@ -270,7 +358,7 @@ def fit_cca_and_transform(components, word_train, word_test, receptor_train, rec
 
 def make_affinity_map(affinity_file, normalize):
     affinity_map = {}
-    min_value = -4.0 # -4.8451 # 4.0
+    min_value = -4.8451 #-4.0 # -4.8451 # 4.0
     eps = 1e-7
     with open(affinity_file, 'r') as volumes:
         lol = list(csv.reader(volumes, delimiter=','))
@@ -293,9 +381,9 @@ def make_affinity_map(affinity_file, normalize):
                     values.append(float(row[i+1]))
                     receptor_columns[r].append(float(row[i+1]))
             if normalize == 'exponent':
-                affinity_map[drug.lower()] = np.power(10, -np.array(values))
+                affinity_map[drug] = np.power(10, -np.array(values))
             else:
-                affinity_map[drug.lower()] = (np.array(values)) - max(values) # Potency Transform
+                affinity_map[drug] = (np.array(values)) - max(values) # Potency Transform
             if normalize == 'by_drug':
                 mean = np.mean(real_values)
                 std = np.std(real_values) + eps
@@ -306,7 +394,7 @@ def make_affinity_map(affinity_file, normalize):
                         drug_normalized.append(0)
                     else:
                         drug_normalized.append((v-mean)/std)
-                affinity_map[drug.lower()] = np.array(drug_normalized)
+                affinity_map[drug] = np.array(drug_normalized)
 
     if normalize == 'by_receptor':
         means = []
@@ -354,30 +442,43 @@ def split_clean(f, text, affinity_map, limit=None, stratify=None, offset_words=0
     cur_words = []
     tag_pattern = re.compile(r"\((\d+)\)\s:")
     meta_data = defaultdict(dict)
-    tags = "None"
+    tags = []
     sex = "Unknown"
+    age = None
     stats = Counter()
     for line in text.split("\n"):
         if line.startswith('"DOSE:') or line.startswith('DOSE:') and len(cur_words) > 0:
             stats[sex] += 1
+            stats[age] += 1
             for t in tags:
                 stats[t] += 1
-            meta_data[offset_testimonials+len(words)] = {'sex': sex, 'tags': tags}
+            meta_data[offset_testimonials + len(words)] = {'sex': sex, 'tags': tags, 'age': age}
             words[offset_testimonials+len(words)] = ' '.join(cur_words)
             cur_words = []
+            sex = "Unknown"
+            age = None
             continue
         if len(tag_pattern.findall(line)) > 0:
             try:
                 tags = line.split(':')[1].split(',')
+                #print(f'{tags} ^ those are the tags')
             except:
                 pass
             continue
         if line[:4] == 'Exp ':
             continue
+        # if line.startswith('Gender:'):
+        #     sex = line.replace('Gender: ', '').strip().lower()
+        #     continue
+        # if 'BODY WEIGHT:' in line:
+        #     #stats[t]
+        #     continue
         if line.startswith('Gender:'):
             sex = line.replace('Gender: ', '').strip().lower()
             continue
-        if 'BODY WEIGHT:' in line:
+        if line.startswith('Age at time of experience: '):
+            age = line.replace('Age at time of experience: ', '').strip()
+            #rint(f'got age: {age}')
             continue
         if len(line.strip()) < MIN_LINE_CHARS or line[0] == '[' or line[0] == '"':
             continue
@@ -394,18 +495,31 @@ def split_clean(f, text, affinity_map, limit=None, stratify=None, offset_words=0
             if len(t) > 2:
                 cur_words.append(t)
     if len(cur_words) > 0:
-        meta = {'sex': sex, 'tags': tags}
         stats[sex] += 1
-        for t in tags:
-            stats[t] += 1
-        meta_data[offset_testimonials + len(words)] = meta
+        stats[age] += 1
+        # for t in tags:
+        #     stats[t] += 1
+        meta_data[offset_testimonials + len(words)] = {'sex': sex, 'tags': tags, 'age': age}
         words[offset_testimonials + len(words)] = ' '.join(cur_words)
     total_new_testimonials = len(words)
     if stratify is not None:
         new_words = {}
         for i in words:
-            if meta_data[i]['sex'] == stratify:
+            if stratify in ['young', 'old']:
+                try:
+                    if int(meta_data[i]['age']) < MEDIAN_AGE and stratify == 'young':
+                        new_words[i] = words[i]
+                    elif int(meta_data[i]['age']) >= MEDIAN_AGE and stratify == 'old':
+                        new_words[i] = words[i]
+                    else:
+                        del meta_data[i]
+                except Exception as e:
+                    del meta_data[i]
+                    pass
+            elif meta_data[i]['sex'] == stratify:
                 new_words[i] = words[i]
+            else:
+                del meta_data[i]
         words = new_words
     if limit is not None and len(words) > limit:
         print(f'For file {f} we randomly sampled {limit} of the {len(words)} total testimonials.')
@@ -417,12 +531,12 @@ def split_clean(f, text, affinity_map, limit=None, stratify=None, offset_words=0
     selected2drugs = {}
     selected2testimonials = {}
     for i, w in enumerate(sorted(list(words.keys()))):
-        selected2drugs[offset_words+i] = f.replace('.txt', '').lower()
+        selected2drugs[offset_words+i] = f.replace('.txt', '') #.lower()
         selected2testimonials[offset_words+i] = w
-    affinities = [affinity_map[f.replace('.txt', '').lower()] for _ in range(len(words))]
+    affinities = [affinity_map[f.replace('.txt', '')] for _ in range(len(words))]
     # for k in stats:
     #     print(f' {k} has: {stats[k]}')
-    return words, affinities, selected2testimonials, selected2drugs, total_new_testimonials
+    return words, affinities, selected2testimonials, selected2drugs, total_new_testimonials, meta_data
 
 
 def danilos_permutation_test(n_keep, x_matrix, y_matrix, n_permutations=1000, random_seed=42):
@@ -531,7 +645,7 @@ def plot_clouds(cca, word_columns, receptors, pca_loadings, word_loadings, drug_
             word = np.array(word_columns)[word_loadings[:, i]][-(k+1)]
             word_map[word] = scaled_weight
             sign_map[word] = 1
-        print(f'got word map: {word_map}')
+        #print(f'got word map: {word_map}')
         wc = wordcloud.WordCloud(background_color='white')
         wc.generate_from_frequencies(word_map)
         bag = wc.recolor(color_func=partial(_color, sign_map, pos_color, neg_color))

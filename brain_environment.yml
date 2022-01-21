@@ -1,7 +1,7 @@
 name: brain
 channels:
-  - anaconda
   - conda-forge
+  - anaconda
   - defaults
 dependencies:
   - attrs=19.3.0=py_0
@@ -34,14 +34,12 @@ dependencies:
   - libpng=1.6.37=h7cec526_2
   - libtiff=4.0.9=h79f4b77_1002
   - llvm-openmp=4.0.1=hcfea43d_1
-  - matplotlib-base=3.1.1=py36h3a684a6_1
   - mkl=2019.4=233
   - mkl-service=2.0.2=py36h1de35cc_0
   - mkl_fft=1.0.12=py36h5e564d8_0
   - mkl_random=1.0.2=py36h27c97d8_0
   - murmurhash=1.0.0=py36h0a44026_0
   - ncurses=6.1=h0a44026_1
-  - numpy-base=1.19.1=py36hcfb5961_0
   - olefile=0.46=pyh9f0ad1d_1
   - openssl=1.1.1i=h35c211d_0
   - pandas=0.25.0=py36h0a44026_0
@@ -99,6 +97,7 @@ dependencies:
     - pyparsing==2.4.6
     - rsa==4.0
     - s3transfer==0.3.3
+    - seaborn==0.11.2
     - six==1.12.0
     - sklearn==0.0
     - smart-open==1.10.0
